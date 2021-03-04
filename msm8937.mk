@@ -79,7 +79,7 @@ PRODUCT_PACKAGES += \
 
 # Device-specific Settings
 PRODUCT_PACKAGES += \
-    XiaomiParts
+    XiaomiAddon
 
 # Audio
 PRODUCT_PACKAGES += \
