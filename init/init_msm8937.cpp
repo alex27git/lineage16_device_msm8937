@@ -1,6 +1,6 @@
 /*
    Copyright (c) 2016, The CyanogenMod Project
-   Copyright (c) 2017, The LineageOS Project
+   Copyright (c) 2019, The LineageOS Project
 
    Redistribution and use in source and binary forms, with or without
    modification, are permitted provided that the following conditions are
@@ -30,33 +30,43 @@
 
 #include <cstdlib>
 #include <fstream>
-#include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <sys/sysinfo.h>
+#include <unistd.h>
 
-#include <android-base/file.h>
 #include <android-base/properties.h>
-#include <android-base/strings.h>
+#define _REALLY_INCLUDE_SYS__SYSTEM_PROPERTIES_H_
+#include <sys/_system_properties.h>
 
-#include "property_service.h"
 #include "vendor_init.h"
-
-#include "init_msm8937.h"
+#include "property_service.h"
 
 using android::base::GetProperty;
 using android::init::property_set;
-using android::base::ReadFileToString;
-using android::base::Trim;
 
 char const *heapstartsize;
 char const *heapgrowthlimit;
 char const *heapsize;
 char const *heapminfree;
 char const *heapmaxfree;
+char const *heaptargetutilization;
 
-__attribute__ ((weak))
-void init_target_properties() {}
+void property_override(char const prop[], char const value[])
+{
+    prop_info *pi;
+
+    pi = (prop_info*) __system_property_find(prop);
+    if (pi)
+        __system_property_update(pi, value, strlen(value));
+    else
+        __system_property_add(prop, strlen(prop), value, strlen(value));
+}
+
+void property_override_dual(char const system_prop[], char const vendor_prop[], char const value[])
+{
+    property_override(system_prop, value);
+    property_override(vendor_prop, value);
+}
 
 void check_device()
 {
@@ -64,66 +74,41 @@ void check_device()
 
     sysinfo(&sys);
 
-    if (sys.totalram > 3072ull * 1024 * 1024) {
-        // from - phone-xxhdpi-4096-dalvik-heap.mk
+    if (sys.totalram > 5072ull * 1024 * 1024) {
+        // from - phone-xhdpi-6144-dalvik-heap.mk
         heapstartsize = "16m";
         heapgrowthlimit = "256m";
         heapsize = "512m";
-        heapminfree = "4m";
-        heapmaxfree = "8m";
-    } else if (sys.totalram > 2048ull * 1024 * 1024) {
-        // from - phone-xxhdpi-3072-dalvik-heap.mk
+        heaptargetutilization = "0.5";
+        heapminfree = "8m";
+        heapmaxfree = "32m";
+    } else if (sys.totalram > 3072ull * 1024 * 1024) {
+        // from - phone-xxhdpi-4096-dalvik-heap.mk
         heapstartsize = "8m";
-        heapgrowthlimit = "288m";
-        heapsize = "768m";
-        heapminfree = "512k";
-	heapmaxfree = "8m";
+        heapgrowthlimit = "256m";
+        heapsize = "512m";
+        heaptargetutilization = "0.6";
+        heapminfree = "8m";
+        heapmaxfree = "16m";
     } else {
-        // from - phone-xxhdpi-2048-dalvik-heap.mk
-        heapstartsize = "16m";
+        // from - phone-xhdpi-2048-dalvik-heap.mk
+        heapstartsize = "8m";
         heapgrowthlimit = "192m";
         heapsize = "512m";
-        heapminfree = "2m";
+        heaptargetutilization = "0.75";
+        heapminfree = "512k";
         heapmaxfree = "8m";
-   }
-}
-
-void set_zram_size(void)
-{
-    FILE *f = fopen("/sys/block/zram0/disksize", "wb");
-    int MB = 1024 * 1024;
-    std::string zram_disksize;
-    struct sysinfo si;
-
-    // Check if zram exist
-    if (f == NULL) {
-        return;
     }
-
-    // Initialize system info
-    sysinfo(&si);
-
-    // Set zram disksize (divide RAM size by 3)
-    zram_disksize = std::to_string(si.totalram / MB / 3);
-
-    // Write disksize to sysfs
-    fprintf(f, "%sM", zram_disksize.c_str());
-
-    // Close opened file
-    fclose(f);
 }
 
 void vendor_load_properties()
 {
     check_device();
-    set_zram_size();
 
     property_set("dalvik.vm.heapstartsize", heapstartsize);
     property_set("dalvik.vm.heapgrowthlimit", heapgrowthlimit);
     property_set("dalvik.vm.heapsize", heapsize);
-    property_set("dalvik.vm.heaptargetutilization", "0.75");
+    property_set("dalvik.vm.heaptargetutilization", heaptargetutilization);
     property_set("dalvik.vm.heapminfree", heapminfree);
     property_set("dalvik.vm.heapmaxfree", heapmaxfree);
-
-    init_target_properties();
 }
